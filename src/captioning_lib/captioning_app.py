@@ -197,14 +197,14 @@ def main():
         print(f"⚠️  WARNING: Recent-chunk mode with short partial duration ({args.min_partial_duration}s < 2.0s) may reduce transcription quality.")
         print("   Consider using retranscribe mode (default) for short durations or increase --min_partial_duration.")
     
-    audio_queue = queue.Queue(maxsize=1000)
+    audio_queue = queue.Queue(maxsize=5000)
 
     # Start transcription thread
     stop_threads = threading.Event()  # Event to signal threads to stop    
     transcription_handler = captioning_utils.TranscriptionWorker(sampling_rate=captioning_utils.SAMPLING_RATE)
     transcriber = threading.Thread(target=transcription_handler.transcription_worker, 
                                    kwargs={'vad': vad,
-                                           'asr': asr_model,
+                                           asr': asr_model,
                                            'audio_queue': audio_queue,
                                            'caption_printer': caption_printer,
                                            'stop_threads': stop_threads,

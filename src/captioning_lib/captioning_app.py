@@ -204,7 +204,7 @@ def main():
     transcription_handler = captioning_utils.TranscriptionWorker(sampling_rate=captioning_utils.SAMPLING_RATE)
     transcriber = threading.Thread(target=transcription_handler.transcription_worker, 
                                    kwargs={'vad': vad,
-                                           asr': asr_model,
+                                           'asr': asr_model,
                                            'audio_queue': audio_queue,
                                            'caption_printer': caption_printer,
                                            'stop_threads': stop_threads,

@@ -72,6 +72,8 @@ def capture_audio_from_stream(audio_stream, stop_threads, caption_printer):
     try:
         # Stream is already running via callback, just wait for interrupt
         while True:
+            print("Testing main thread is alive. Press Ctrl+C to stop.")
+
             time.sleep(0.1)
     except KeyboardInterrupt:
         pass

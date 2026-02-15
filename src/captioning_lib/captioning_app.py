@@ -14,9 +14,9 @@ import queue
 from captioning_lib import captioning_utils
 from captioning_lib import evaluation_utils
 import threading
-import time
-import json
-
+import time 
+import os
+from pathlib import Path
 
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -142,9 +142,12 @@ def capture_audio_from_file(
 
     #TODO: adding the code get json info 
     # ... inside capture_audio_from_file ...
-
+    # Get the directory where the current script (captioning_app.py) is located
+    script_dir = Path(__file__).parent.absolute()
+    json_path = script_dir / 'user_profile.json' # Or 'user_profile.json' depending on your filename
+    
     # Load the context
-    with open('user_profile.json', 'r') as f:
+    with open(json_path, 'r') as f:
         context = json.load(f)
 
     speech_support_type = context['speechSupportType']

@@ -15,6 +15,7 @@ from captioning_lib import captioning_utils
 from captioning_lib import evaluation_utils
 import threading
 import time
+import json
 
 
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -139,24 +140,69 @@ def capture_audio_from_file(
 
     full_transcript = caption_printer.get_complete_caption()
 
+    #TODO: adding the code get json info 
+    # ... inside capture_audio_from_file ...
+
+    # Load the context
+    with open('user_profile.json', 'r') as f:
+        context = json.load(f)
+
+    speech_support_type = context['speechSupportType']
+    specific_sounds = context['specificSounds']
+    full_name = context['fullName']
+
+    print(f"Speech Support Type: {speech_support_type}")
+    print(f"Specific Sounds: {specific_sounds}")
+    print(f"Full Name: {full_name}")
     #TODO: add the logics for passing the full_transcript through llama.cpp
     # Define a prompt to guide the LLaMA model
     print("\n>>> Preparing prompt for LLaMA correction...")
     print(full_transcript)
+    # llama_prompt = (  
+    #  "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
+    # "You are a transcription correction engine. Fix phonetic errors. The user "
+    # "Output ONLY the corrected text. Do not add names or dialogue.<|eot_id|>"
+    
+    # "<|start_header_id|>user<|end_header_id|>\n\n"
+    # f"Correct this: {full_transcript}<|eot_id|>"
+    
+    # "<|start_header_id|>assistant<|end_header_id|>\n"
+    # "Correction:"
+    # )
+    
+    # 1. Define the core instructions (as provided)
+    SYSTEM_PROMPT = f"""
+    You are a speech clarity assistant specialised in {speech_support_type} speech.
+    The speaker has difficulties are often centered on: {specific_sounds}.
+ß
+    STRICT RULES:
+    - Remove repeated syllables caused by stuttering.
+    - Remove repeated full words caused by stuttering.
+    - Remove pause artifacts.
+    - Preserve the original meaning exactly.
+    - Do NOT add new words.
+    - Do NOT change sentence intent.
+    - Do NOT guess missing content.
+    - If the meaning is unclear, respond only with: UNCLEAR
+    - output only the answer nothing else, do not add any explanation or extra text.
+    """
+
+    # 2. Build the full LLaMA prompt for the model
     llama_prompt = (  
-     "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
-    "You are a transcription correction engine. Fix phonetic errors. "
-    "Output ONLY the corrected text. Do not add names or dialogue.<|eot_id|>"
-    
-    "<|start_header_id|>user<|end_header_id|>\n\n"
-    f"Correct this: {full_transcript}<|eot_id|>"
-    
-    "<|start_header_id|>assistant<|end_header_id|>\n"
-    "Correction:"
+        f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
+        f"{SYSTEM_PROMPT}<|eot_id|>"
+        
+        "<|start_header_id|>user<|end_header_id|>\n\n"
+        f"Correct this transcription: {full_transcript}<|eot_id|>"
+        
+        "<|start_header_id|>assistant<|end_header_id|>\n"
+        "Correction: "
     )
-    # Log the prompt being sent to LLaMA
-    print("Sending the following prompt to LLaMA:")
+
+    # 3. Log the prompt (useful for debugging your Eval mode)
+    print("Sending the following structured prompt to LLaMA:")
     print(llama_prompt)
+ 
 
     # Pass the prompt and transcript to LLaMA for processing
     llama_response = captioning_utils.run_llama_model(prompt=llama_prompt)

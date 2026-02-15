@@ -59,86 +59,86 @@ class PlainCaptionPrinter(CaptionPrinter):
                 print(f"\r\033[2K\rPARTIAL: {transcript}", flush=True, end='')
         else:
 
-            #TODO: adding the code get json info 
-            # ... inside capture_audio_from_file ...
-            # Get the directory where the current script (captioning_app.py) is located
-            script_dir = Path(__file__).parent.absolute()
-            json_path = script_dir / 'data_source/user_profile.json' # Or 'user_profile.json' depending on your filename
+            # #TODO: adding the code get json info 
+            # # ... inside capture_audio_from_file ...
+            # # Get the directory where the current script (captioning_app.py) is located
+            # script_dir = Path(__file__).parent.absolute()
+            # json_path = script_dir / 'data_source/user_profile.json' # Or 'user_profile.json' depending on your filename
             
-            # Load the context
-            with open(json_path, 'r') as f:
-                context = json.load(f)
+            # # Load the context
+            # with open(json_path, 'r') as f:
+            #     context = json.load(f)
 
-            speech_support_type = context['speechSupportType']
-            specific_sounds = context['specificSounds']
-            full_name = context['fullName']
+            # speech_support_type = context['speechSupportType']
+            # specific_sounds = context['specificSounds']
+            # full_name = context['fullName']
 
-            print(f"Speech Support Type: {speech_support_type}")
-            print(f"Specific Sounds: {specific_sounds}")
-            print(f"Full Name: {full_name}")
-            #TODO: add the logics for passing the full_transcript through llama.cpp
-            # Define a prompt to guide the LLaMA model
-            print("\n>>> Preparing prompt for LLaMA correction...")
-            print(f"full transcript: {transcript}")
+            # print(f"Speech Support Type: {speech_support_type}")
+            # print(f"Specific Sounds: {specific_sounds}")
+            # print(f"Full Name: {full_name}")
+            # #TODO: add the logics for passing the full_transcript through llama.cpp
+            # # Define a prompt to guide the LLaMA model
+            # print("\n>>> Preparing prompt for LLaMA correction...")
+            # print(f"full transcript: {transcript}")
+            # # llama_prompt = (  
+            # #  "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
+            # # "You are a transcription correction engine. Fix phonetic errors. The user "
+            # # "Output ONLY the corrected text. Do not add names or dialogue.<|eot_id|>"
+            
+            # # "<|start_header_id|>user<|end_header_id|>\n\n"
+            # # f"Correct this: {full_transcript}<|eot_id|>"
+            
+            # # "<|start_header_id|>assistant<|end_header_id|>\n"
+            # # "Correction:"
+            # # )
+            
+            # # 1. Define the core instructions (as provided)
+            # SYSTEM_PROMPT = f"""
+            # You are a speech clarity assistant specialised in {speech_support_type} speech.
+            # The speaker has difficulties are often centered on: {specific_sounds}.
+            # STRICT RULES:
+            # - Remove repeated syllables caused by stuttering.
+            # - Remove repeated full words caused by stuttering.
+            # - Remove pause artifacts.
+            # - Preserve the original meaning exactly.
+            # - Do NOT add new words.
+            # - Do NOT change sentence intent.
+            # - Do NOT guess missing content.
+            # - If the meaning is unclear, respond only with: UNCLEAR
+            # - output only the answer nothing else, do not add any explanation or extra text.
+            # """
+
+            # # 2. Build the full LLaMA prompt for the model
             # llama_prompt = (  
-            #  "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
-            # "You are a transcription correction engine. Fix phonetic errors. The user "
-            # "Output ONLY the corrected text. Do not add names or dialogue.<|eot_id|>"
-            
-            # "<|start_header_id|>user<|end_header_id|>\n\n"
-            # f"Correct this: {full_transcript}<|eot_id|>"
-            
-            # "<|start_header_id|>assistant<|end_header_id|>\n"
-            # "Correction:"
+            #     f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
+            #     f"{SYSTEM_PROMPT}<|eot_id|>"
+                
+            #     "<|start_header_id|>user<|end_header_id|>\n\n"
+            #     f"Correct this transcription: {transcript}<|eot_id|>"
+                
+            #     "<|start_header_id|>assistant<|end_header_id|>\n"
+            #     "Correction: "
             # )
-            
-            # 1. Define the core instructions (as provided)
-            SYSTEM_PROMPT = f"""
-            You are a speech clarity assistant specialised in {speech_support_type} speech.
-            The speaker has difficulties are often centered on: {specific_sounds}.
-            STRICT RULES:
-            - Remove repeated syllables caused by stuttering.
-            - Remove repeated full words caused by stuttering.
-            - Remove pause artifacts.
-            - Preserve the original meaning exactly.
-            - Do NOT add new words.
-            - Do NOT change sentence intent.
-            - Do NOT guess missing content.
-            - If the meaning is unclear, respond only with: UNCLEAR
-            - output only the answer nothing else, do not add any explanation or extra text.
-            """
 
-            # 2. Build the full LLaMA prompt for the model
-            llama_prompt = (  
-                f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
-                f"{SYSTEM_PROMPT}<|eot_id|>"
-                
-                "<|start_header_id|>user<|end_header_id|>\n\n"
-                f"Correct this transcription: {transcript}<|eot_id|>"
-                
-                "<|start_header_id|>assistant<|end_header_id|>\n"
-                "Correction: "
-            )
-
-            # 3. Log the prompt (useful for debugging your Eval mode)
-            print("Sending the following structured prompt to LLaMA:")
-            print(llama_prompt)
+            # # 3. Log the prompt (useful for debugging your Eval mode)
+            # print("Sending the following structured prompt to LLaMA:")
+            # print(llama_prompt)
         
 
-            # Pass the prompt and transcript to LLaMA for processing
-            llama_response = captioning_utils.run_llama_model(prompt=llama_prompt)
+            # # Pass the prompt and transcript to LLaMA for processing
+            # llama_response = captioning_utils.run_llama_model(prompt=llama_prompt)
 
-            # Log the response received from LLaMA
-            print("Received the following response from LLaMA:")
-            print(llama_response)
+            # # Log the response received from LLaMA
+            # print("Received the following response from LLaMA:")
+            # print(llama_response)
 
-            # Print the summary generated by LLaMA
-            print("\n>>> LLaMA Summary:\n", llama_response)
-            # wer = evaluation_utils.get_wer(reference_text, full_transcript, normalized=True)
-            # print(f"Normalized WER (Word Error Rate): {wer}")
+            # # Print the summary generated by LLaMA
+            # print("\n>>> LLaMA Summary:\n", llama_response)
+            # # wer = evaluation_utils.get_wer(reference_text, full_transcript, normalized=True)
+            # # print(f"Normalized WER (Word Error Rate): {wer}")
 
-            # wer_llama = evaluation_utils.get_wer(reference_text, full_transcript, normalized=True)
-            # print(f"Normalized WER after LLaMA correction: {wer_llama}")
+            # # wer_llama = evaluation_utils.get_wer(reference_text, full_transcript, normalized=True)
+            # # print(f"Normalized WER after LLaMA correction: {wer_llama}")
             
             if self.verbose and duration:
                 print(f"\rSEGMENT ({duration:.1f}s total): {transcript}")

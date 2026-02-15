@@ -529,7 +529,7 @@ def run_llama_model(prompt, model_path="models/llama/llama_model.gguf", max_toke
     logging.info(f"Model path: {model_path}, Max tokens: {max_tokens}")
     try:
         llama = Llama(model_path=model_path)
-        response = llama(prompt, max_tokens=max_tokens)
+        response = llama(prompt, max_tokens=max_tokens, verbose=False,)
         logging.info("LLaMA model response generated successfully.")
         return response["choices"][0]["text"].strip()
     except Exception as e:

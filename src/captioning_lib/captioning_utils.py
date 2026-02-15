@@ -8,6 +8,7 @@ import sounddevice as sd
 import queue
 import time
 from pathlib import Path
+from llama_cpp import Llama
 
 ########## configurations ##########
 def get_argument_parser():
@@ -512,6 +513,29 @@ def find_default_input_device():
         list_audio_devices()
         return None
 
+def run_llama_model(prompt, model_path="models/llama/llama_model.gguf", max_tokens=100):
+    """
+    Run the LLaMA model to generate a response based on the given prompt.
+
+    Args:
+        prompt (str): The input prompt for the LLaMA model.
+        model_path (str): Path to the LLaMA model file in GGUF format.
+        max_tokens (int): Maximum number of tokens to generate.
+
+    Returns:
+        str: The generated response from the LLaMA model.
+    """
+    logging.info(f"Running LLaMA model with prompt: {prompt}")
+    logging.info(f"Model path: {model_path}, Max tokens: {max_tokens}")
+    try:
+        llama = Llama(model_path=model_path)
+        response = llama(prompt, max_tokens=max_tokens)
+        logging.info("LLaMA model response generated successfully.")
+        return response["choices"][0]["text"].strip()
+    except Exception as e:
+        logging.error(f"Error running LLaMA model: {e}")
+        return "Error generating response from LLaMA."
+    
 if __name__ == "__main__":
     default_mic = find_default_input_device()
     print(default_mic)#['name'], default_mic['index'])

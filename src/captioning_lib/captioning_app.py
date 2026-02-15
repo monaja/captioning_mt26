@@ -145,7 +145,7 @@ def capture_audio_from_file(
         # "<|begin_of_text|><|start_header_id|>system<|end_header_id|>"
         "You are a transcription correction engine. Correct the phonetic errors. Output ONLY the corrected text.\n"
         # "<|eot_id|><|start_header_id|>user<|end_header_id|>\n" 
-        f"'{full_transcript}'"
+        f"{full_transcript}"
         # "<|eot_id|><|start_header_id|>assistant<|end_header_id|>"
         # "Output:<|eot_id|><|start_header_id|>assistant<|end_header_id|>"
     )

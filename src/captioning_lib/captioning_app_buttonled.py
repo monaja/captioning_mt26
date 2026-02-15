@@ -1,0 +1,248 @@
+
+# Stand-alone captioning app that can also be used to evaluate streaming performance (eval mode).
+#
+# For captioning from microphone:
+# python captioning_app.py --model moonshine_onnx_tiny --rich_captions --eos_min_silence=200
+#
+# For evaluation with audio file and reference transcript:
+# python captioning_app.py --model moonshine_onnx_tiny --eval --audio_file=../samples/jfk.mp3 --reference_file=../samples/jfk.txt
+
+
+import json
+import logging
+from captioning_lib import printers
+import queue
+from captioning_lib import captioning_utils_buttonled as captioning_utils
+from captioning_lib import evaluation_utils
+import threading
+import time
+
+
+logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def get_args():
+    # Extended command line arguments for evaluation.
+    
+    parser = captioning_utils.get_argument_parser()
+    parser.add_argument(
+        "--eval",
+        action="store_true",
+        help="Enable evaluation mode with audio file input instead of microphone.",
+    )
+    parser.add_argument(
+        "--audio_file",
+        type=str,
+        help="Path to audio file for evaluation (required in evaluation mode).",
+    )
+    parser.add_argument(
+        "--reference_file",
+        type=str,
+        help="Path to reference transcript file for evaluation (required in evaluation mode).",
+    )
+    
+    parser.add_argument(
+        "--rtf",
+        type=float,
+        default=0.0,
+        help="Real-Time Factor for audio processing speed. Set to 1.0 for real-time, 0.0 for no delay.",
+    )
+    args = parser.parse_args()
+
+    # Validation for evaluation mode
+    if args.eval and (not args.audio_file or not args.reference_file):
+        parser.error("Evaluation mode requires both --audio_file and --reference_file.")
+
+    if args.show_audio_devices:
+        captioning_utils.list_audio_devices()
+        exit(0)
+
+    return args
+
+def capture_audio_from_stream(audio_stream, stop_threads, caption_printer):
+    """Capture audio using callback-based stream (non-blocking)"""
+
+    print("Recording system ready.")
+    print("Press button to start/stop recording.")
+    caption_printer.start()
+
+    try:
+        while not stop_threads.is_set():
+            # Only process if recording is active
+            if not captioning_utils.is_currently_recording():
+                time.sleep(0.05)
+                continue
+
+            time.sleep(0.01)
+
+    except KeyboardInterrupt:
+        pass
+
+    finally:
+        time.sleep(0.2)
+        stop_threads.set()
+        audio_stream.stop()
+        audio_stream.close()
+        
+
+def capture_audio_from_file(
+        audio_file, reference_file, audio_queue, stop_threads, caption_printer, rtf):
+
+    """Simulate real-time audio streaming with specified speed factor.
+    
+    If `rtf` is set to 1.0, it simulates real-time audio input speed but adding delay. 
+    If set to 0.0, no delay is introduced, and the audio file is processed as fast as possible.
+    """
+
+    # get audio chunks to simulate microphone
+    audio_data, sample_rate = evaluation_utils.read_audio_file(audio_file)
+    if sample_rate != captioning_utils.SAMPLING_RATE:
+        raise ValueError(f"Sample rate mismatch: expected {captioning_utils.SAMPLING_RATE}Hz, got {sample_rate}Hz. ")
+    audio_chunks = evaluation_utils.chunk_audio(audio_data, chunk_size=captioning_utils.AUDIO_FRAMES_TO_CAPTURE)
+    
+    print(f"Audio file split into {len(audio_chunks)} chunks of {captioning_utils.AUDIO_FRAMES_TO_CAPTURE} frames each")
+    print("Audio file duration: {:.2f} seconds".format(len(audio_data) / captioning_utils.SAMPLING_RATE))
+    
+    # Read reference transcript
+    reference_text = evaluation_utils.read_reference_file(reference_file)
+
+    # chunk duration
+    if rtf <= 0:
+        sleep_time = 0
+    else:
+        chunk_duration = captioning_utils.AUDIO_FRAMES_TO_CAPTURE / captioning_utils.SAMPLING_RATE
+        sleep_time = chunk_duration / rtf
+        print(f"RTF: {rtf:.2f}")
+        print(f">> Sleep time: {sleep_time:.2f} seconds per chunk")
+        print(f">> Total wait time: {len(audio_chunks) * sleep_time:.2f} seconds")
+
+    start_time = time.time()
+    for chunk in audio_chunks:
+        # Simulate real-time audio input by waiting between chunks
+        time.sleep(sleep_time)
+        try:
+            audio_queue.put(chunk)
+        except queue.Full:
+            logging.warning("Audio queue is full, skipping this chunk.")
+
+    # wait until all audio from queue is processed
+    while not audio_queue.empty():
+        time.sleep(0.05)
+
+    # send stop signal to transcription thread and give smoe time to finish
+    stop_threads.set()
+    time.sleep(1.0)
+
+    time_elapsed = time.time() - start_time
+    print(f"Total processing time for audio file: {time_elapsed:.2f} seconds")
+
+    full_transcript = caption_printer.get_complete_caption()
+    wer = evaluation_utils.get_wer(reference_text, full_transcript, normalized=True)
+
+    audio_duration = len(audio_data) / captioning_utils.SAMPLING_RATE
+    results = {
+        "audio_duration_seconds": audio_duration,
+        "processing_time_seconds": time_elapsed,
+        "rtf": rtf,
+        "normalized_wer": wer,        
+        # "transcript": full_transcript,
+        # " reference": reference_text,
+        }
+    
+    print("\n>>> Evaluation Results:\n", json.dumps(results, indent=2))
+
+
+def main():
+    """Main function supporting both live captioning and evaluation modes."""
+    args = get_args()
+
+    if args.eval:
+        caption_printer = evaluation_utils.EvaluationPrinter()
+    else:
+        if args.rich_captions:
+            caption_printer = printers.RichCaptionPrinter(verbose=args.verbose)
+        else:
+            caption_printer = printers.PlainCaptionPrinter(verbose=args.verbose)
+
+    
+    vad = captioning_utils.get_vad(eos_min_silence=args.eos_min_silence, model_path=args.silero_vad_model_path)    
+    # Initialize GPIO system
+    captioning_utils.initialize_led_state()
+    # Set output_streaming based on recent_chunk_mode setting
+    # When retranscribing, disable streaming to avoid repeated word-by-word display
+    recent_chunk_mode = args.recent_chunk_mode
+    output_streaming = recent_chunk_mode
+    
+    asr_model = captioning_utils.load_asr_model(model_name=args.model, 
+                                                language=args.language,
+                                                sampling_rate=captioning_utils.SAMPLING_RATE, 
+                                                show_word_confidence_scores=args.show_word_confidence_scores,
+                                                model_path=args.model_path,
+                                                output_streaming=output_streaming,
+                                                use_raspberry_pi_session_config=args.use_raspberry_pi_session_config)
+    
+    # Print transcription mode information
+    mode = "Recent-chunk mode" if recent_chunk_mode else "Retranscribe mode"
+    streaming_info = ""
+    if hasattr(asr_model, 'output_streaming') and asr_model.output_streaming:
+        if args.model.startswith(('fasterwhisper', 'whisperonnx')):
+            streaming_info = " (token streaming enabled)"
+    elif not recent_chunk_mode:
+        streaming_info = " (token streaming disabled to avoid repetition)"
+    
+    print(f"Transcription mode: {mode}{streaming_info}")
+    print(f"Partial duration: {args.min_partial_duration}s")
+    
+    # Warning for suboptimal configuration
+    if recent_chunk_mode and args.min_partial_duration < 2.0:
+        print(f"⚠️  WARNING: Recent-chunk mode with short partial duration ({args.min_partial_duration}s < 2.0s) may reduce transcription quality.")
+        print("   Consider using retranscribe mode (default) for short durations or increase --min_partial_duration.")
+    
+    audio_queue = queue.Queue(maxsize=5000)
+
+    # Start transcription thread
+    stop_threads = threading.Event()  # Event to signal threads to stop    
+    transcription_handler = captioning_utils.TranscriptionWorker(sampling_rate=captioning_utils.SAMPLING_RATE)
+    transcriber = threading.Thread(target=transcription_handler.transcription_worker, 
+                                   kwargs={'vad': vad,
+                                           'asr': asr_model,
+                                           'audio_queue': audio_queue,
+                                           'caption_printer': caption_printer,
+                                           'stop_threads': stop_threads,
+                                           'min_partial_duration': args.min_partial_duration,
+                                           'max_segment_duration': args.max_segment_duration,
+                                           'recent_chunk_mode': args.recent_chunk_mode})
+    transcriber.daemon = True
+    transcriber.start()
+
+
+    if args.eval:
+        capture_audio_from_file(args.audio_file, args.reference_file, 
+                                audio_queue, stop_threads,
+                                caption_printer, args.rtf)
+    else:
+        device_index = args.audio_input_device_index
+        if device_index:
+            # Convert to int if it's a numeric string, otherwise keep as string (e.g., "plughw:1,0")
+            try:
+                device_index = int(device_index)
+            except (ValueError, TypeError):
+                pass  # Keep as string for ALSA device names
+            print(f"Using user specified audio input device: {device_index}")
+        else:
+            # find default device index
+            input_device = captioning_utils.find_default_input_device()
+            print(f"Using default audio input device: {input_device}")
+            device_index = input_device['index']
+        audio_stream = captioning_utils.get_audio_stream_callback(audio_queue, input_device_index=device_index)
+        capture_audio_from_stream(audio_stream, stop_threads, caption_printer)
+
+        caption_printer.stop()
+        print("\nRecording stopped.")
+        
+
+    print("\n>>> Model stats:")
+    asr_model.get_stats()
+
+
+if __name__ == "__main__":
+    main()

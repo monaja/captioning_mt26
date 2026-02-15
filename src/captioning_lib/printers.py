@@ -59,9 +59,9 @@ class PlainCaptionPrinter(CaptionPrinter):
                 print(f"\r\033[2K\rPARTIAL: {transcript}", flush=True, end='')
         else: 
             if self.verbose and duration:
-                print(f"\rSEGMENT ({duration:.1f}s total): {transcript}")
+                print(f"\rP1:SEGMENT ({duration:.1f}s total): {transcript}")
             else:
-                print(f"\rSEGMENT: {transcript}")
+                print(f"\rP1:SEGMENT: {transcript}")
 
 class RichCaptionPrinter(CaptionPrinter):
 
@@ -130,14 +130,14 @@ class RichCaptionPrinter(CaptionPrinter):
         # Build text with verbose information if enabled
         if partial:
             if self.verbose and is_recent_chunk_mode and recent_chunk_duration:
-                text = f"PARTIAL (recent-chunk, {recent_chunk_duration:.1f}s chunk/{duration:.1f}s total): {transcript}"
+                text = f"P:PARTIAL (recent-chunk, {recent_chunk_duration:.1f}s chunk/{duration:.1f}s total): {transcript}"
             elif self.verbose and duration:
-                text = f"PARTIAL (retranscribe, {duration:.1f}s total): {transcript}"
+                text = f"P:PARTIAL (retranscribe, {duration:.1f}s total): {transcript}"
             else:
                 text = transcript
         else:
             if self.verbose and duration:
-                text = f"SEGMENT ({duration:.1f}s total): {transcript}"
+                text = f"P:SEGMENT ({duration:.1f}s total): {transcript}"
             else:
                 text = transcript
 

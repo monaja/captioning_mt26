@@ -8,6 +8,7 @@ import sounddevice as sd
 import queue
 import time
 from pathlib import Path
+from scipy.signal import resample
 
 ########## configurations ##########
 def get_argument_parser():
@@ -421,14 +422,13 @@ def get_audio_stream(input_device_index=INPUT_DEVICE_INDEX, target_latency=2.0, 
     print('Using audio input device:', device_info['name'])
     audio_stream = sd.InputStream(
         device=input_device_index,
-        channels=CHANNELS,
-        samplerate=SAMPLING_RATE,
-        dtype=DTYPE,
-        blocksize=AUDIO_FRAMES_TO_CAPTURE,
+        channels=1,                # FORCE mono
+        samplerate=device_sample_rate,
+        dtype='int16',             # FORCE ALSA friendly
+        blocksize=device_blocksize,
+        callback=audio_callback,
         latency=target_latency
-    )
-    audio_stream.start()
-    return audio_stream
+   )
 
 
 def get_audio_stream_callback(audio_queue, input_device_index=INPUT_DEVICE_INDEX, target_latency=2.0):
@@ -472,6 +472,10 @@ def get_audio_stream_callback(audio_queue, input_device_index=INPUT_DEVICE_INDEX
 
         Keep this minimal - any processing here can cause overflows
         """
+        # ONLY push to queue if the button state is ACTIVE
+        if not is_currently_recording():
+         return # Skip this chunk entirely
+
         if status:
             # Status flags indicate buffer issues
             if status.input_overflow:
@@ -479,17 +483,22 @@ def get_audio_stream_callback(audio_queue, input_device_index=INPUT_DEVICE_INDEX
 
         # Downsample if needed
         if needs_resampling:
-            # Simple downsampling by averaging (48kHz -> 16kHz is 3:1)
-            downsample_factor = device_sample_rate // SAMPLING_RATE
-            # indata shape: (frames, channels)
-            num_output_frames = len(indata) // downsample_factor
-            resampled = indata[:num_output_frames * downsample_factor].reshape(
-                num_output_frames, downsample_factor, CHANNELS
-            ).mean(axis=1).astype(DTYPE)
-            audio_data = resampled.tobytes()
+            # Convert to mono float32
+            audio_float = indata[:, 0].astype(np.float32)
+
+            # Calculate correct number of output samples
+            num_output_samples = int(len(audio_float) * SAMPLING_RATE / device_sample_rate)
+
+            # Proper resampling
+            resampled = resample(audio_float, num_output_samples)
+
+            # Convert back to int16
+            resampled_int16 = (resampled * 32767).astype(np.int16)
+
+            audio_data = resampled_int16.tobytes()
+
         else:
             audio_data = indata[:].tobytes()
-
         try:
             audio_queue.put_nowait(audio_data)
         except queue.Full:

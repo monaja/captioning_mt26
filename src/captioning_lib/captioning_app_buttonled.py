@@ -68,11 +68,7 @@ def capture_audio_from_stream(audio_stream, stop_threads, caption_printer):
     try:
         while not stop_threads.is_set():
             # Only process if recording is active
-            if not captioning_utils.is_currently_recording():
-                time.sleep(0.05)
-                continue
-
-            time.sleep(0.01)
+                time.sleep(0.1)
 
     except KeyboardInterrupt:
         pass
@@ -197,7 +193,7 @@ def main():
         print(f"⚠️  WARNING: Recent-chunk mode with short partial duration ({args.min_partial_duration}s < 2.0s) may reduce transcription quality.")
         print("   Consider using retranscribe mode (default) for short durations or increase --min_partial_duration.")
     
-    audio_queue = queue.Queue(maxsize=5000)
+    audio_queue = queue.Queue(maxsize=10000)
 
     # Start transcription thread
     stop_threads = threading.Event()  # Event to signal threads to stop    

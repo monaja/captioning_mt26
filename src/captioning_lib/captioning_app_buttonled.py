@@ -68,11 +68,7 @@ def capture_audio_from_stream(audio_stream, stop_threads, caption_printer):
     try:
         while not stop_threads.is_set():
             # Only process if recording is active
-            if not captioning_utils.is_currently_recording():
-                time.sleep(0.05)
-                continue
-
-            time.sleep(0.01)
+                time.sleep(0.1)
 
     except KeyboardInterrupt:
         pass

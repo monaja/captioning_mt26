@@ -38,9 +38,9 @@ class EvaluationPrinter(printers.CaptionPrinter):
             self.transcripts.append(transcript)
             self.durations.append(duration)
             if duration:
-                print(f"\nSEGMENT: {transcript} ({duration:.2f} sec)")
+                print(f"\n TSEGMENT: {transcript} ({duration:.2f} sec)")
             else:
-                print(f"\nSEGMENT: {transcript}")
+                print(f"\n TSEGMENT: {transcript}")
         else:
             print(f"\rPARTIAL: {transcript}", flush=True, end='')
     

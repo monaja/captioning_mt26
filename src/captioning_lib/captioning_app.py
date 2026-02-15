@@ -235,6 +235,155 @@ def capture_audio_from_file(
     print("\n>>> Evaluation Results:\n", json.dumps(results, indent=2))
 
 
+def capture_audio_from_file_store(
+        audio_file, reference_file, audio_queue, stop_threads, caption_printer, rtf):
+
+    """Simulate real-time audio streaming with specified speed factor.
+    
+    If `rtf` is set to 1.0, it simulates real-time audio input speed but adding delay. 
+    If set to 0.0, no delay is introduced, and the audio file is processed as fast as possible.
+    """
+
+    # get audio chunks to simulate microphone
+    audio_data, sample_rate = evaluation_utils.read_audio_file(audio_file)
+    if sample_rate != captioning_utils.SAMPLING_RATE:
+        raise ValueError(f"Sample rate mismatch: expected {captioning_utils.SAMPLING_RATE}Hz, got {sample_rate}Hz. ")
+    audio_chunks = evaluation_utils.chunk_audio(audio_data, chunk_size=captioning_utils.AUDIO_FRAMES_TO_CAPTURE)
+    
+    print(f"Audio file split into {len(audio_chunks)} chunks of {captioning_utils.AUDIO_FRAMES_TO_CAPTURE} frames each")
+    print("Audio file duration: {:.2f} seconds".format(len(audio_data) / captioning_utils.SAMPLING_RATE))
+    
+    # Read reference transcript
+    reference_text = evaluation_utils.read_reference_file(reference_file)
+
+    # chunk duration
+    if rtf <= 0:
+        sleep_time = 0
+    else:
+        chunk_duration = captioning_utils.AUDIO_FRAMES_TO_CAPTURE / captioning_utils.SAMPLING_RATE
+        sleep_time = chunk_duration / rtf
+        print(f"RTF: {rtf:.2f}")
+        print(f">> Sleep time: {sleep_time:.2f} seconds per chunk")
+        print(f">> Total wait time: {len(audio_chunks) * sleep_time:.2f} seconds")
+
+    start_time = time.time()
+    for chunk in audio_chunks:
+        # Simulate real-time audio input by waiting between chunks
+        time.sleep(sleep_time)
+        try:
+            audio_queue.put(chunk)
+        except queue.Full:
+            logging.warning("Audio queue is full, skipping this chunk.")
+
+    # wait until all audio from queue is processed
+    while not audio_queue.empty():
+        time.sleep(0.05)
+
+    # send stop signal to transcription thread and give smoe time to finish
+    stop_threads.set()
+    time.sleep(1.0)
+
+    time_elapsed = time.time() - start_time
+    print(f"Total processing time for audio file: {time_elapsed:.2f} seconds")
+
+    full_transcript = caption_printer.get_complete_caption()
+
+    #TODO: adding the code get json info 
+    # ... inside capture_audio_from_file ...
+    # Get the directory where the current script (captioning_app.py) is located
+    script_dir = Path(__file__).parent.absolute()
+    json_path = script_dir / 'data_source/user_profile.json' # Or 'user_profile.json' depending on your filename
+    
+    # Load the context
+    with open(json_path, 'r') as f:
+        context = json.load(f)
+
+    speech_support_type = context['speechSupportType']
+    specific_sounds = context['specificSounds']
+    full_name = context['fullName']
+
+    print(f"Speech Support Type: {speech_support_type}")
+    print(f"Specific Sounds: {specific_sounds}")
+    print(f"Full Name: {full_name}")
+    #TODO: add the logics for passing the full_transcript through llama.cpp
+    # Define a prompt to guide the LLaMA model
+    print("\n>>> Preparing prompt for LLaMA correction...")
+    print(f"full transcript: {full_transcript}")
+    # llama_prompt = (  
+    #  "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
+    # "You are a transcription correction engine. Fix phonetic errors. The user "
+    # "Output ONLY the corrected text. Do not add names or dialogue.<|eot_id|>"
+    
+    # "<|start_header_id|>user<|end_header_id|>\n\n"
+    # f"Correct this: {full_transcript}<|eot_id|>"
+    
+    # "<|start_header_id|>assistant<|end_header_id|>\n"
+    # "Correction:"
+    # )
+    
+    # 1. Define the core instructions (as provided)
+    SYSTEM_PROMPT = f"""
+    You are a speech clarity assistant specialised in {speech_support_type} speech.
+    The speaker has difficulties are often centered on: {specific_sounds}.
+ß
+    STRICT RULES:
+    - Remove repeated syllables caused by stuttering.
+    - Remove repeated full words caused by stuttering.
+    - Remove pause artifacts.
+    - Preserve the original meaning exactly.
+    - Do NOT add new words.
+    - Do NOT change sentence intent.
+    - Do NOT guess missing content.
+    - If the meaning is unclear, respond only with: UNCLEAR
+    - output only the answer nothing else, do not add any explanation or extra text.
+    """
+
+    # 2. Build the full LLaMA prompt for the model
+    llama_prompt = (  
+        f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
+        f"{SYSTEM_PROMPT}<|eot_id|>"
+        
+        "<|start_header_id|>user<|end_header_id|>\n\n"
+        f"Correct this transcription: {full_transcript}<|eot_id|>"
+        
+        "<|start_header_id|>assistant<|end_header_id|>\n"
+        "Correction: "
+    )
+
+    # 3. Log the prompt (useful for debugging your Eval mode)
+    print("Sending the following structured prompt to LLaMA:")
+    print(llama_prompt)
+ 
+
+    # Pass the prompt and transcript to LLaMA for processing
+    llama_response = captioning_utils.run_llama_model(prompt=llama_prompt)
+
+    # Log the response received from LLaMA
+    print("Received the following response from LLaMA:")
+    print(llama_response)
+
+    # Print the summary generated by LLaMA
+    print("\n>>> LLaMA Summary:\n", llama_response)
+    wer = evaluation_utils.get_wer(reference_text, full_transcript, normalized=True)
+    print(f"Normalized WER (Word Error Rate): {wer}")
+
+    wer_llama = evaluation_utils.get_wer(reference_text, full_transcript, normalized=True)
+    print(f"Normalized WER after LLaMA correction: {wer_llama}")
+
+    audio_duration = len(audio_data) / captioning_utils.SAMPLING_RATE
+    results = {
+        "audio_duration_seconds": audio_duration,
+        "processing_time_seconds": time_elapsed,
+        "rtf": rtf,
+        "normalized_wer": wer,        
+        # "transcript": full_transcript,
+        # " reference": reference_text,
+        }
+    
+    print("\n>>> Evaluation Results:\n", json.dumps(results, indent=2))
+
+
+
 def main():
     """Main function supporting both live captioning and evaluation modes."""
     args = get_args()

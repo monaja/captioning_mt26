@@ -528,8 +528,8 @@ def run_llama_model(prompt, model_path="/home/rpi/dev/my_example_dir/llama.cpp/m
     logging.info(f"Running LLaMA model with prompt: {prompt}")
     logging.info(f"Model path: {model_path}, Max tokens: {max_tokens}")
     try:
-        llama = Llama(model_path=model_path)
-        response = llama(prompt, max_tokens=max_tokens, verbose=False,)
+        llama = Llama(model_path=model_path, verbose=False,)
+        response = llama(prompt, max_tokens=max_tokens)
         logging.info("LLaMA model response generated successfully.")
         return response["choices"][0]["text"].strip()
     except Exception as e:

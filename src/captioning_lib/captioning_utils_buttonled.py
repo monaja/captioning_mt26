@@ -280,6 +280,17 @@ class TranscriptionWorker():
 
         while not stop_threads.is_set():
             try:
+
+                # If recording is OFF → clear buffer and skip processing
+                if not is_currently_recording():
+                    if len(speech_buffer) > 0:
+                        speech_buffer = np.empty(0, dtype=np.float32)
+                        self.last_partial_transcribed_length = 0
+                        self.accumulated_partial_text = ""
+                        logging.debug("Speech buffer cleared (recording stopped)")
+                    time.sleep(0.05)
+                    continue 
+
                 # read new chunk from queue and add to buffer
                 chunk = audio_queue.get(timeout=0.05)
                 chunk_np = np.frombuffer(chunk, dtype=np.int16).astype(np.float32) / 32768.0

@@ -141,12 +141,23 @@ def capture_audio_from_file(
 
     #TODO: add the logics for passing the full_transcript through llama.cpp
     # Define a prompt to guide the LLaMA model
-    llama_prompt = (
-        "Below is the transcript of an audio file. "
-        "Your task is to review the transcript and correct any sentences or words that do not make sense. "
-        "Ensure the corrected transcript maintains the original context and meaning:\n\n"
-        f"{full_transcript}\n\n"
-        "Corrected Transcript:"
+    llama_prompt = (  
+        "<|begin_of_text|><|start_header_id|>system<|end_header_id|>"
+        "You are a transcription correction tool. Your ONLY task is to fix phonetic errors from a speech-to-text engine."
+        "- DO NOT add speakers (e.g., Ms. Johnson)."
+        "- DO NOT add dialogue."
+        "- DO NOT change the meaning."
+        "- Output ONLY the corrected sentence."
+
+        "<|eot_id|><|start_header_id|>user<|end_header_id|>"
+        "Input: TeaLow testing the project file one out."
+        "Output: Hello, testing the project file 1."
+
+        "Input: Eye weight for the bus."
+        "Output: I wait for the bus." 
+        
+        "Input: {full_transcript}"
+        "Output:<|eot_id|><|start_header_id|>assistant<|end_header_id|>"
     )
     # Log the prompt being sent to LLaMA
     logging.info("Sending the following prompt to LLaMA:")

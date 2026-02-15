@@ -143,13 +143,9 @@ def capture_audio_from_file(
     # Define a prompt to guide the LLaMA model
     llama_prompt = (  
         # "<|begin_of_text|><|start_header_id|>system<|end_header_id|>"
-        "You are a transcription correction engine. Correct the phonetic errors. Output ONLY the corrected text."
-        # "<|eot_id|><|start_header_id|>user<|end_header_id|>\n"
-        "Transcription: TeaLow testing the project file one out.\n"
-        "Correction: Hello, testing the project file 1.\n"
-        "Transcription: " 
-        f"{full_transcript}"
-        "Correction:"
+        "You are a transcription correction engine. Correct the phonetic errors. Output ONLY the corrected text.\n"
+        # "<|eot_id|><|start_header_id|>user<|end_header_id|>\n" 
+        f"'{full_transcript}'"
         # "<|eot_id|><|start_header_id|>assistant<|end_header_id|>"
         # "Output:<|eot_id|><|start_header_id|>assistant<|end_header_id|>"
     )

@@ -258,7 +258,6 @@ class TranscriptionWorker():
         # seconds since last recording
         return float(self.frames_since_last_speech) / self.sampling_rate
 
-
     def transcription_worker(
             self,
             asr,
@@ -269,10 +268,6 @@ class TranscriptionWorker():
             min_partial_duration=MINIMUM_PARTIAL_DURATION,
             max_segment_duration=MAXIMUM_SEGMENT_DURATION,
             recent_chunk_mode=False):
-        """Worker thread that processes audio chunks for transcription"""
-
-        # transcription logic inspired by 
-        # https://github.com/usefulsensors/moonshine/blob/main/demo/moonshine-onnx/live_captions.py
 
         speech_buffer = np.empty(0, dtype=np.float32)
         self.is_speech_recording = False
@@ -280,142 +275,126 @@ class TranscriptionWorker():
 
         while not stop_threads.is_set():
             try:
-
-                # If recording is OFF → clear buffer and skip processing
-                if not is_currently_recording():
-                    if len(speech_buffer) > 0:
-                        speech_buffer = np.empty(0, dtype=np.float32)
-                        self.last_partial_transcribed_length = 0
-                        self.accumulated_partial_text = ""
-                        logging.debug("Speech buffer cleared (recording stopped)")
-                    time.sleep(0.05)
-                    continue 
-
-                # read new chunk from queue and add to buffer
                 chunk = audio_queue.get(timeout=0.05)
                 chunk_np = np.frombuffer(chunk, dtype=np.int16).astype(np.float32) / 32768.0
                 speech_buffer = np.concatenate((speech_buffer, chunk_np))
                 speech_buffer_duration = len(speech_buffer) / self.sampling_rate
-                current_recording_duration = time.time() - time_since_last_transcription            
+                current_recording_duration = time.time() - time_since_last_transcription
 
-                # process speech in buffer depending on VAD event
                 vad_event = vad(chunk_np)
+
                 if vad_event:
-                    logging.debug(f"VAD event detected: {vad_event}")
                     if "start" in vad_event:
                         self.is_speech_recording = True
                         self.had_speech = True
                         self.frames_since_last_speech = 0
-                        self.last_partial_transcribed_length = 0  # Reset partial tracking
-                        self.accumulated_partial_text = ""  # Reset accumulated text
-                        time_since_last_transcription = time.time()  # Reset timer when speech starts
+                        self.last_partial_transcribed_length = 0
+                        self.accumulated_partial_text = ""
+                        time_since_last_transcription = time.time()
+
                     elif "end" in vad_event:
-                        # finish the segment by processing all so far and then flushing buffer
                         self.is_speech_recording = False
                         self.frames_since_last_speech += len(chunk_np)
-                        
+
                         complete_text = ""
                         for text_chunk in asr.transcribe(speech_buffer, segment_end=True):
                             if text_chunk:
                                 complete_text += text_chunk
+
                         complete_text = complete_text.strip()
+
                         if complete_text:
-                            # Only display the final complete segment once
-                            caption_printer.print(complete_text, duration=speech_buffer_duration, partial=False)
+                            caption_printer.print(
+                                complete_text,
+                                duration=speech_buffer_duration,
+                                partial=False
+                            )
                             self.transcribed_segments.append(complete_text)
+
                         speech_buffer = np.empty(0, dtype=np.float32)
-                        # Reset partial tracking for new segment
                         self.last_partial_transcribed_length = 0
                         self.accumulated_partial_text = ""
                         time_since_last_transcription = time.time()
+
                 else:
-                    # no VAD event means recording state hasn't changed
                     if self.is_speech_recording:
-                        # force end a segment if it is getting too long even if no EOS detected by VAD
-                        if speech_buffer_duration > max_segment_duration:  # e.g., 5 seconds
-                            logging.debug(f"Max segment duration reached, ending segment: {speech_buffer_duration:.2f} sec")
-                            
+
+                        if speech_buffer_duration > max_segment_duration:
+
                             complete_text = ""
                             for text_chunk in asr.transcribe(speech_buffer, segment_end=True):
                                 if text_chunk:
                                     complete_text += text_chunk
-                            
+
                             complete_text = complete_text.strip()
+
                             if complete_text:
-                                # Only display the final complete segment once
-                                caption_printer.print(complete_text, duration=speech_buffer_duration, partial=False)
+                                caption_printer.print(
+                                    complete_text,
+                                    duration=speech_buffer_duration,
+                                    partial=False
+                                )
                                 self.transcribed_segments.append(complete_text)
+
                             speech_buffer = np.empty(0, dtype=np.float32)
-                            # Reset partial tracking for new segment
                             self.last_partial_transcribed_length = 0
                             self.accumulated_partial_text = ""
                             time_since_last_transcription = time.time()
 
-                        # if we have enough data in the buffer, transcribe a partial
                         elif current_recording_duration > min_partial_duration:
-                            logging.debug(f"Transcribing partial segment: {current_recording_duration:.2f} sec")
-                            
+
                             if not recent_chunk_mode:
-                                # Mode 1: Retranscribe all accumulated audio (better quality for short durations)
                                 self.accumulated_partial_text = ""
-                                for text_chunk in asr.transcribe(speech_buffer, segment_end=False):
+
+                                for text_chunk in asr.transcribe(
+                                        speech_buffer,
+                                        segment_end=False):
                                     if text_chunk:
                                         self.accumulated_partial_text += text_chunk
                                         d = len(speech_buffer) / self.sampling_rate
-                                        caption_printer.print(self.accumulated_partial_text, duration=d, partial=True, 
-                                                             is_recent_chunk_mode=False, recent_chunk_duration=None)
+                                        caption_printer.print(
+                                            self.accumulated_partial_text,
+                                            duration=d,
+                                            partial=True,
+                                            is_recent_chunk_mode=False,
+                                            recent_chunk_duration=None
+                                        )
                             else:
-                                # Mode 2: Transcribe only recent chunk (efficient for long durations)
-                                recent_chunk = speech_buffer[self.last_partial_transcribed_length:]
+                                recent_chunk = speech_buffer[
+                                    self.last_partial_transcribed_length:]
+
                                 if len(recent_chunk) > 0:
-                                    recent_text = ""
-                                    for text_chunk in asr.transcribe(recent_chunk, segment_end=False):
+                                    for text_chunk in asr.transcribe(
+                                            recent_chunk,
+                                            segment_end=False):
                                         if text_chunk:
-                                            recent_text += text_chunk
-                                            # Update accumulated display text
                                             self.accumulated_partial_text += text_chunk
                                             d = len(speech_buffer) / self.sampling_rate
-                                            recent_chunk_duration = len(recent_chunk) / self.sampling_rate
-                                            caption_printer.print(self.accumulated_partial_text, duration=d, partial=True, 
-                                                                 is_recent_chunk_mode=True, recent_chunk_duration=recent_chunk_duration)
-                                    
-                                    # Update tracking position
+                                            recent_chunk_duration = len(
+                                                recent_chunk) / self.sampling_rate
+
+                                            caption_printer.print(
+                                                self.accumulated_partial_text,
+                                                duration=d,
+                                                partial=True,
+                                                is_recent_chunk_mode=True,
+                                                recent_chunk_duration=recent_chunk_duration
+                                            )
+
                                     self.last_partial_transcribed_length = len(speech_buffer)
-                            
+
                             time_since_last_transcription = time.time()
+
                     else:
                         empty_frames_to_keep = int(0.1 * self.sampling_rate)
                         speech_buffer = speech_buffer[-empty_frames_to_keep:]
-
                         self.frames_since_last_speech += len(chunk_np)
 
             except queue.Empty:
-                if stop_threads.is_set():
-                    break
                 continue
             except Exception as e:
-                if stop_threads.is_set():
-                    break
                 print(f"\nTranscription error: {e}")
                 continue
-
-        if len(speech_buffer) > 0:
-            logging.debug("Flushing remaining speech buffer...")
-            
-            complete_text = ""
-            for text_chunk in asr.transcribe(speech_buffer, segment_end=True):
-                if text_chunk:
-                    complete_text += text_chunk
-            
-            complete_text = complete_text.strip()
-            if complete_text:
-                # Only display the final complete segment once
-                caption_printer.print(complete_text, duration=len(speech_buffer) / self.sampling_rate, partial=False)
-                self.transcribed_segments.append(complete_text)
-            speech_buffer = np.empty(0, dtype=np.float32)
-            # Reset partial tracking
-            self.last_partial_transcribed_length = 0
-            self.accumulated_partial_text = ""
 
 
 # TODO this is deprecated - remove in future

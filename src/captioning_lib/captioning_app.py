@@ -141,13 +141,18 @@ def capture_audio_from_file(
 
     #TODO: add the logics for passing the full_transcript through llama.cpp
     # Define a prompt to guide the LLaMA model
+    print("\n>>> Preparing prompt for LLaMA correction...")
+    print(full_transcript)
     llama_prompt = (  
-        # "<|begin_of_text|><|start_header_id|>system<|end_header_id|>"
-        "You are a transcription correction engine. Correct the phonetic errors. Output ONLY the corrected text.\n"
-        # "<|eot_id|><|start_header_id|>user<|end_header_id|>\n" 
-        f"{full_transcript}"
-        # "<|eot_id|><|start_header_id|>assistant<|end_header_id|>"
-        # "Output:<|eot_id|><|start_header_id|>assistant<|end_header_id|>"
+     "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
+    "You are a transcription correction engine. Fix phonetic errors. "
+    "Output ONLY the corrected text. Do not add names or dialogue.<|eot_id|>"
+    
+    "<|start_header_id|>user<|end_header_id|>\n\n"
+    f"Correct this: {full_transcript}<|eot_id|>"
+    
+    "<|start_header_id|>assistant<|end_header_id|>\n"
+    "Correction:"
     )
     # Log the prompt being sent to LLaMA
     print("Sending the following prompt to LLaMA:")

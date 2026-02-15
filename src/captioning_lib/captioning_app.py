@@ -144,7 +144,7 @@ def capture_audio_from_file(
     # ... inside capture_audio_from_file ...
     # Get the directory where the current script (captioning_app.py) is located
     script_dir = Path(__file__).parent.absolute()
-    json_path = script_dir / 'user_profile.json' # Or 'user_profile.json' depending on your filename
+    json_path = script_dir / 'data_source/user_profile.json' # Or 'user_profile.json' depending on your filename
     
     # Load the context
     with open(json_path, 'r') as f:
@@ -298,6 +298,21 @@ def main():
 
 
     if args.eval:
+        print("\nRecording complete. Now processing the audio file...")
+        
+        # Record audio from the microphone and save it to a file
+        output_audio_file = "recorded_audio.wav"
+        print(f"Recording audio to {output_audio_file}... Press Ctrl+C to stop.")
+        
+        try:
+            # Use the utility function to record audio
+            captioning_utils.record_audio_to_file(output_audio_file, duration=None)  # Duration=None for manual stop
+        except KeyboardInterrupt:
+            print("\nRecording stopped.")
+        
+        # Update args to use the recorded audio file for evaluation
+        args.audio_file = output_audio_file
+        print(f"Audio recorded and saved to {output_audio_file}. Proceeding with evaluation...")
         capture_audio_from_file(args.audio_file, args.reference_file, 
                                 audio_queue, stop_threads,
                                 caption_printer, args.rtf)

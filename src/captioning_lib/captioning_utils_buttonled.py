@@ -432,87 +432,59 @@ def get_audio_stream(input_device_index=INPUT_DEVICE_INDEX, target_latency=2.0, 
 
 
 def get_audio_stream_callback(audio_queue, input_device_index=INPUT_DEVICE_INDEX, target_latency=2.0):
-    """Create and return a sounddevice InputStream using callback mode
 
-    Callback mode runs audio capture in a high-priority thread, preventing
-    buffer overflows even during heavy processing loads (e.g., long transcriptions).
-
-    Args:
-        audio_queue: Queue to push audio data into
-        input_device_index: Audio device index to use
-        target_latency: Buffer size in seconds. Higher = more stable but delayed.
-                       Recommended: 2.0 for Raspberry Pi, 0.2-0.5 for desktop,
-                       0.1 for voice agents that can tolerate occasional drops.
-
-    Returns:
-        audio_stream: Started InputStream object
-    """
     device_info = sd.query_devices(input_device_index)
     print('Using audio input device:', device_info['name'])
 
-    # Check if device supports the target sample rate
     device_sample_rate = SAMPLING_RATE
     needs_resampling = False
 
     try:
-        sd.check_input_settings(device=input_device_index, channels=CHANNELS,
-                                samplerate=SAMPLING_RATE, dtype=DTYPE)
+        sd.check_input_settings(device=input_device_index,
+                                channels=CHANNELS,
+                                samplerate=SAMPLING_RATE,
+                                dtype='float32')
         print(f"Device supports {SAMPLING_RATE}Hz")
     except sd.PortAudioError:
-        # Device doesn't support 16kHz, use device's default sample rate
         device_sample_rate = int(device_info['default_samplerate'])
         needs_resampling = True
         print(f"Device doesn't support {SAMPLING_RATE}Hz, capturing at {device_sample_rate}Hz and downsampling")
 
-    # Adjust blocksize for device sample rate
     device_blocksize = int(AUDIO_FRAMES_TO_CAPTURE * device_sample_rate / SAMPLING_RATE) if needs_resampling else AUDIO_FRAMES_TO_CAPTURE
 
     def audio_callback(indata, frames, time_info, status):
-        """Called by sounddevice in high-priority audio thread
 
-        Keep this minimal - any processing here can cause overflows
-        """
-        # ONLY push to queue if the button state is ACTIVE
         if not is_currently_recording():
-         return # Skip this chunk entirely
+            return
 
-        if status:
-            # Status flags indicate buffer issues
-            if status.input_overflow:
-                logging.warning(f"Audio callback status: input overflow")
+        if status and status.input_overflow:
+            logging.warning("Audio overflow detected")
 
-        # Downsample if needed
+        audio_float = indata[:, 0].astype(np.float32)
+
         if needs_resampling:
-            # Convert to mono float32
-            audio_float = indata[:, 0].astype(np.float32)
-
-            # Calculate correct number of output samples
             num_output_samples = int(len(audio_float) * SAMPLING_RATE / device_sample_rate)
-
-            # Proper resampling
             resampled = resample(audio_float, num_output_samples)
-
-            # Convert back to int16
-            resampled_int16 = (resampled * 32767).astype(np.int16)
-
-            audio_data = resampled_int16.tobytes()
-
+            audio_int16 = (resampled * 32767).astype(np.int16)
         else:
-            audio_data = indata[:].tobytes()
-        try:
-            audio_queue.put_nowait(audio_data)
-        except queue.Full:
-            logging.warning("Audio queue is full, skipping this chunk.")
+            audio_int16 = (audio_float * 32767).astype(np.int16)
 
+        try:
+            audio_queue.put_nowait(audio_int16.tobytes())
+        except queue.Full:
+            logging.warning("Audio queue full, skipping chunk")
+
+    # ✅ STREAM CREATION MUST BE HERE (OUTSIDE CALLBACK)
     audio_stream = sd.InputStream(
         device=input_device_index,
-        channels=CHANNELS,
+        channels=1,
         samplerate=device_sample_rate,
-        dtype=DTYPE,
+        dtype='float32',
         blocksize=device_blocksize,
         callback=audio_callback,
         latency=target_latency
     )
+
     audio_stream.start()
     return audio_stream
 

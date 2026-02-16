@@ -179,7 +179,6 @@ def capture_audio_from_file(
     SYSTEM_PROMPT = f"""
     You are a speech clarity assistant specialised in {speech_support_type} speech.
     The speaker has difficulties are often centered on: {specific_sounds}.
-ß
     STRICT RULES:
     - Remove repeated syllables caused by stuttering.
     - Remove repeated full words caused by stuttering.

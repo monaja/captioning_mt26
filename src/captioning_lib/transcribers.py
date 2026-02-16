@@ -11,7 +11,7 @@ DEFAULT_LANGUAGE = 'en'
 
 class Transcriber():
 
-    def __init__(self, model_name_or_path, sampling_rate, show_word_confidence_scores=False, language=DEFAULT_LANGUAGE, output_streaming=True):
+    def __init__(self, model_name_or_path, sampling_rate, show_word_confidence_scores=False, language=DEFAULT_LANGUAGE, output_streaming=False):
         self.number_of_partials_transcribed = 0
         self.speech_segments_transcribed = 0
         self.speech_frames_transcribed = 0
@@ -107,6 +107,7 @@ class FasterWhisperTranscriber(Transcriber):
             logging.info(f"Loaded FasterWhisper model: {model_name} --> {full_model_name}")
 
     def _transcribe(self, audio_data, segment_end):
+       # print(f"segment_end: {segment_end}")
         # for partial transcriptions, we are using smaller beam size
         beam_size = 5 if segment_end else 1
 
@@ -141,6 +142,7 @@ class FasterWhisperTranscriber(Transcriber):
         else:
             # Accumulate all segments and yield as one result
             complete_text = ""
+        
             for segment in segments:
                 if use_word_probabilities:
                     for word in segment.words:
@@ -148,7 +150,10 @@ class FasterWhisperTranscriber(Transcriber):
                 else:
                     complete_text += segment.text + ' '
             if complete_text.strip():
+
                 yield complete_text.strip()
+                #print("completed text and printing now")
+                #print(complete_text.strip())
 
 class VoskTranscriber(Transcriber):
     AVAILABLE_MODELS = {'vosk_tiny': 'tiny'}

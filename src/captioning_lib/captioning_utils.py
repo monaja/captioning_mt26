@@ -513,7 +513,7 @@ def find_default_input_device():
         list_audio_devices()
         return None
 
-def run_llama_model(prompt, model_path="/home/rpi/dev/my_example_dir/llama.cpp/models/LFM2.5-1.2B-Instruct-Q8_0.gguf", max_tokens=100):
+def run_llama_model(prompt, model_path="../llama/models/LFM2.5-1.2B-Instruct-Q8_0.gguf", max_tokens=100):
     """
     Run the LLaMA model to generate a response based on the given prompt.
 

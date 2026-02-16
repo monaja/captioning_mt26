@@ -200,7 +200,7 @@ BUTTON_PIN = 18
 
 red_led = LED(RED_LED_PIN)
 green_led = LED(GREEN_LED_PIN)
-button = Button(BUTTON_PIN, pull_up=False, bounce_time=0.3)
+button = Button(BUTTON_PIN, pull_up=True, bounce_time=0.3)
 
 is_recording = False
 

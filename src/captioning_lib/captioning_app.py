@@ -17,6 +17,7 @@ import threading
 import time 
 import os
 from pathlib import Path
+from captioning_lib.redis_client import RedisClient
 
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -308,6 +309,17 @@ def capture_audio_from_file_store(
 
 def main():
     """Main function supporting both live captioning and evaluation modes."""
+
+    """ Starting Redis """
+    redis_client = RedisClient()  # create an instance
+
+    redis_client.rpush("queue", "task_data")
+    
+    data = redis_client.lpop("queue")
+    print("Popped:", data)
+
+    print("Pushed to Redis!")
+
     args = get_args()
 
     if args.eval:

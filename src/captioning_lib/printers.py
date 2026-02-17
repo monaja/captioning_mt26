@@ -2,6 +2,7 @@
 import os
 import sys
 import time
+from captioning_lib.redis_client import RedisClient
 
 # Default delay for verbose streaming output - mostly to simulate real-time streaming on slow devices.
 # Set to 0.0 for no delay.
@@ -56,7 +57,11 @@ class PlainCaptionPrinter(CaptionPrinter):
                 print(f"\rSEGMENT ({duration:.1f}s total): {transcript}")
             else:
                 print(f"\rSEGMENT: {transcript}")
+                """ Starting Redis """
+                redis_client = RedisClient()  # create an instance
 
+                redis_client.rpush("transcript", transcript + " 2 ")
+         
              
 
 class RichCaptionPrinter(CaptionPrinter):
